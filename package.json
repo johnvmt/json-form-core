@@ -1,0 +1,20 @@
+{
+  "name": "json-schema-form-core",
+  "version": "0.0.0-alpha1",
+  "description": "Core store for *-json-schema-form modules",
+  "main": "exports.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/johnvmt/json-schema-form-core.git"
+  },
+  "type": "module",
+  "dependencies": {
+    "dataloader": "^2.2.2",
+    "object-rules-engine": "^0.0.1",
+    "object-subscriptions": "^0.3.2"
+  },
+  "private": true
+}

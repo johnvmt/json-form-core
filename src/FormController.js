@@ -22,12 +22,17 @@ class FormController extends SimpleEventEmitter {
             types: {
                 node: FormNode,
                 ...options.types
+            },
+            object: {
+                separator: "/",
+                parent: "..",
+                current: ".",
             }
         };
         
         this._logger = this._options.logger ?? new BaseLogger();
 
-        this._store = this._options.store ?? new NestedObjectWithSubscriptions();
+        this._store = this._options.store ?? new NestedObjectWithSubscriptions(this._options.object);
 
         if(this._options.fragments) // form schema fragments (keyed on fragment key)
             this.fragments = this._options.fragments;
@@ -73,6 +78,7 @@ class FormController extends SimpleEventEmitter {
     node(valuePathOrPathParts, schemaPathOrPathParts, options = {}) {
         const valuePathParts = this._store.pathPartsFromPath(valuePathOrPathParts); // path in values tree
         const schemaPathParts = this._store.pathPartsFromPath(schemaPathOrPathParts); // path in schema tree
+        // TODO return the same node each time so automations do not double-run
         return new this._options.types.node(this, valuePathParts, schemaPathParts, options);
     }
 

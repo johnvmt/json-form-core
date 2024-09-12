@@ -1,8 +1,4 @@
-import {
-    conditionsPassFromSubscriptionObject,
-    conditionsResolvedPathsFromSubscriptionObject,
-    runAutomationsFromSubscriptionObject
-} from "object-rules-engine";
+import { SubscriptionObjectRulesEngineAutomation } from "object-rules-engine";
 
 class FormNode {
     // TODO allow subscribing to component (need to subscribe to schema and components)
@@ -15,11 +11,9 @@ class FormNode {
             start: true,
             ...options
         };
-
-        this._automationStopCallbacks = []; // make this a set?
-
+        
         if(this._options.start)
-            this.startAllAutomations();
+            this.startAutomations();
     }
 
     /**
@@ -186,81 +180,32 @@ class FormNode {
         );
     }
 
-    startAllAutomations() {
-        console.log("STARTING AUTOMATIONS");
+    startAutomations() {
+        this.stopAutomations(); // stop all existing automations
+        const automationConfigs = this.options.automations ?? [];
+
+        this._automations = automationConfigs.map(automationConfig => new SubscriptionObjectRulesEngineAutomation(
+            automationConfig,
+            this._controller.store,
+            {
+                pathPrefix: "$",
+                basePaths: {
+                    // TODO allow overrides
+                    value: this._valuePathParts,
+                    schema: this._schemaPathParts
+                }
+            }
+        ));
+
     }
 
-    stopAllAutomations() {
-        console.log("STOPPING AUTOMATIONS");
-    }
-
-    startAutomation(automation, options = {}) {
-        // TODO how to handle automations if the same node is loaded twice?
-        // don't allow the same one twice??
-        // TODO need to register automations so they can all be run at once??
-        console.log("REGISTER AUTOMATION", automation, options);
-
-        console.log("PR", options.pathReplacements)
-
-        const mergedOptions = {
-            conditions: {
-                object: {
-                    separator: '/' // TODO get from store
-                },
-                // TODO add option to merge in replacements
-                replacements: options.pathReplacements
-            },
-            actions: {
-                // for output object
-                store: this.store,
-                replacements: options.pathReplacements,
-                object: {
-                    separator: '/' // TODO get from store
-                },
+    stopAutomations() {
+        if(this._automations) {
+            for(let automation of this._automations) {
+                automation.destroy();
             }
-        };
 
-        const conditionsPaths = conditionsResolvedPathsFromSubscriptionObject(stateStore, mergedOptions.conditions);
-
-        console.log(conditionsPaths);
-
-        // subscribe to all paths and re-run subscription when any of them changes
-        // cancel subscriptions
-        // TODO debounce
-
-        const unsubscribers = conditionsPaths(automation).map(conditionPath => {
-            return this.store.subscribe(conditionPath, () => {
-                console.log("HIT!")
-            });
-        });
-
-        /*
-        const runAutomations = runAutomationsFromSubscriptionObject(input, options);
-
-        (async () => {
-            //console.log("PATHS", conditionsPaths(automation.condition));
-            console.log("RESULT", await conditionsPass(automation.condition));
-            await runAutomations(automation);
-            //console.log("OUTPUT", input, output);
-            //console.log(conditionsArgs(automation.condition))
-        })();
-
-         */
-
-
-        // get input paths
-        // subscribe to input paths
-        // on any change, run automation
-        // debounce?
-
-        //automations.add(automationWithOptions);
-
-        return () => { // deregister
-            for(let unsubscribe of unsubscribers) {
-                unsubscribe();
-            }
-            // TODO run this when unmounting this component too?
-            //automations.delete(automationWithOptions);
+            delete this._automations;
         }
     }
 
@@ -271,7 +216,7 @@ class FormNode {
 
     destroy() {
         // TODO remove merged?
-        this.stopAllAutomations();
+        this.stopAutomations();
     }
 }
 

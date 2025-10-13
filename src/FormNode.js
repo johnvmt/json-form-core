@@ -12,8 +12,9 @@ class FormNode {
             ...options
         };
         
-        if(this._options.start)
-            this.startAutomations();
+        this._cancelAutomationConfigsSubscription = this._controller.pathSubscribeAutomations(this._schemaPathParts, (automationConfigs) => {
+            this.automationConfigs = automationConfigs;
+        });
     }
 
     /**
@@ -32,6 +33,10 @@ class FormNode {
 
     get options() {
         return this._options;
+    }
+
+    get logger() {
+        return this._controller.logger;
     }
 
     /**
@@ -83,7 +88,18 @@ class FormNode {
      * @returns {*}
      */
     subscribeSchema(callback) {
+        // TODO subscribe within the node to get automations
         return this._controller.pathSubscribeSchema(this._schemaPathParts, callback);
+    }
+    
+    get automationConfigs() {
+        return this._automationConfigs ?? [];
+    }
+    
+    set automationConfigs(automationConfigs) {
+        // TODO use start option
+        this._automationConfigs = automationConfigs;
+        this.startAutomations();
     }
 
     /**
@@ -182,18 +198,21 @@ class FormNode {
 
     startAutomations() {
         this.stopAutomations(); // stop all existing automations
-        const automationConfigs = this.options.automations ?? [];
-
-        this._automations = automationConfigs.map(automationConfig => new SubscriptionObjectRulesEngineAutomation(
+        this._automations = this.automationConfigs.map(automationConfig => new SubscriptionObjectRulesEngineAutomation(
             automationConfig,
             this._controller.store,
             {
                 pathPrefix: "$",
                 basePaths: {
                     // TODO allow overrides
-                    value: this._valuePathParts,
-                    schema: this._schemaPathParts
-                }
+                    node_value: this.controller.pathValueStorePathParts(this._valuePathParts),
+                    node_schema: this.controller.pathSchemaStorePathParts(this._schemaPathParts),
+                    node_extras: this.controller.pathExtrasTreeStorePathParts(this._valuePathParts),
+                    root_value: this.controller.storeValueRootPathParts,
+                    root_schema: this.controller.storeSchemaRootPathParts,
+                    root_extras: this.controller.storeExtrasRootPathParts
+                },
+                logger: this.logger,
             }
         ));
 
@@ -217,6 +236,7 @@ class FormNode {
     destroy() {
         // TODO remove merged?
         this.stopAutomations();
+        this._cancelAutomationConfigsSubscription();
     }
 }
 

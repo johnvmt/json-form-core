@@ -1,17 +1,17 @@
+// utilities
+import SimpleLogger from "simple-utility-logger";
+import { BaseStoreEventEmitterController } from "utility-base-controllers";
+import { NestedObjectWithSubscriptions } from "object-subscriptions";
 import DataLoader from "dataloader";
-import SimpleEventEmitter from "./utils/SimpleEventEmitter.js";
-import {
-    NestedObjectWithSubscriptions
-} from "object-subscriptions";
 
-import BaseLogger from "./utils/BaseLogger.js";
 import FormNode from "./FormNode.js";
 
-class FormController extends SimpleEventEmitter {
+class FormController extends BaseStoreEventEmitterController {
     constructor(options = {}) {
-        super();
-        this._options = {
+        super({
+            logger: new SimpleLogger(),
             ...options,
+            // merge defaults with passed options
             paths: {
                 schema: ['schema'],
                 value: ['value'],
@@ -27,32 +27,32 @@ class FormController extends SimpleEventEmitter {
                 separator: "/",
                 parent: "..",
                 current: ".",
+                ...options.object
             }
-        };
+        });
         
-        this._logger = this._options.logger ?? new BaseLogger();
+        // TODO handle options.object?
+        this._store = this.options.store ?? new NestedObjectWithSubscriptions({}, this.options.object);
 
-        this._store = this._options.store ?? new NestedObjectWithSubscriptions(this._options.object);
+        if(this.options.fragments) // form schema fragments (keyed on fragment key)
+            this.fragments = this.options.fragments;
 
-        if(this._options.fragments) // form schema fragments (keyed on fragment key)
-            this.fragments = this._options.fragments;
+        if(this.options.schema) // form schema (schema path)
+            this.schema = this.options.schema;
 
-        if(this._options.schema) // form schema (schema path)
-            this.schema = this._options.schema;
+        if(this.options.value !== undefined) // form value (value path)
+            this.value = this.options.value;
 
-        if(this._options.value !== undefined) // form value (value path)
-            this.value = this._options.value;
+        if(this.options.extras) // form extras (value path)
+            this.extras = this.options.extras; // alias to set extrasTree
 
-        if(this._options.extras) // form extras (value path)
-            this.extras = this._options.extras; // alias to set extrasTree
-
-        if(this._options.components) // components (special case? TODO remove?)
-            this.components = this._options.components;
+        if(this.options.components) // components (special case? TODO remove?)
+            this.components = this.options.components;
 
         this._fragmentLoader = new DataLoader((keys) => {
             // TODO clear dataloader and cache in store? where?
             this.log("debug", `Loading fragments: ${keys.join(", ")}`);
-            this._options.loadFragments(keys);
+            this.options.loadFragments(keys);
         });
 
         // TODO set value, if set
@@ -60,13 +60,7 @@ class FormController extends SimpleEventEmitter {
         // TODO set (schema) fragments, if set
     }
 
-    /**
-     * Returns the full store
-     * @returns {*|((credential: Credential) => Promise<Credential>)|((typedArray: (Int8Array | Uint8Array | Int16Array | Uint16Array | Int32Array | Uint32Array), index: number, value: number) => number)|((typedArray: (BigInt64Array | BigUint64Array), index: number, value: bigint) => bigint)|NestedObjectWithSubscriptions}
-     */
-    get store() {
-        return this._store;
-    }
+
 
     /**
      * Return a form node at the given value path and schema path
@@ -79,7 +73,7 @@ class FormController extends SimpleEventEmitter {
         const valuePathParts = this._store.pathPartsFromPath(valuePathOrPathParts); // path in values tree
         const schemaPathParts = this._store.pathPartsFromPath(schemaPathOrPathParts); // path in schema tree
         // TODO return the same node each time so automations do not double-run
-        return new this._options.types.node(this, valuePathParts, schemaPathParts, options);
+        return new this.options.types.node(this, valuePathParts, schemaPathParts, options);
     }
 
     /**
@@ -113,7 +107,7 @@ class FormController extends SimpleEventEmitter {
      * @returns {string[]}
      */
     get storeValueRootPathParts() {
-        return this._store.pathPartsFromPath(this._options.paths.value);
+        return this._store.pathPartsFromPath(this.options.paths.value);
     }
 
     /**
@@ -146,7 +140,7 @@ class FormController extends SimpleEventEmitter {
      * @returns {*}
      */
     pathSetValue(valuePathOrPathParts, value) {
-        return this._store.set(this.pathValueStorePathParts(valuePathOrPathParts), value);
+        return this._store.set(this.pathValueStorePathParts(valuePathOrPathParts), value, {array: true});
     }
 
     /**
@@ -199,7 +193,7 @@ class FormController extends SimpleEventEmitter {
      * @returns {string[]}
      */
     get storeSchemaRootPathParts() {
-        return this._store.pathPartsFromPath(this._options.paths.schema);
+        return this._store.pathPartsFromPath(this.options.paths.schema);
     }
 
     /**
@@ -255,6 +249,57 @@ class FormController extends SimpleEventEmitter {
     }
 
     /**
+     * Returns the store path for the schema from a schema path
+     * @param schemaPathOrPathParts
+     * @returns {*[]}
+     */
+    pathAutomationsStorePathParts(schemaPathOrPathParts) {
+        // TODO allow resolving
+        return [
+            ...this.pathSchemaStorePathParts(schemaPathOrPathParts),
+            'automations'
+        ];
+    }
+
+    /**
+     * Returns the schema at the schema path
+     * @param schemaPathOrPathParts
+     * @returns {*}
+     */
+    pathGetAutomations(schemaPathOrPathParts) {
+        return this._store.get(this.pathAutomationsStorePathParts(schemaPathOrPathParts));
+    }
+
+    /**
+     * Sets the schema for the given schema path
+     * @param schemaPathOrPathParts
+     * @param automationConfigs
+     * @returns {*}
+     */
+    pathSetAutomations(schemaPathOrPathParts, automationConfigs) {
+        return this._store.set(this.pathAutomationsStorePathParts(schemaPathOrPathParts), automationConfigs);
+    }
+
+    /**
+     * Deletes the schema for the given schema path
+     * @param schemaPathOrPathParts
+     * @returns {*}
+     */
+    pathDeleteAutomations(schemaPathOrPathParts) {
+        return this._store.delete(this.pathAutomationsStorePathParts(schemaPathOrPathParts));
+    }
+
+    /**
+     * Subscribe to the schema at the given schema path
+     * @param schemaPathOrPathParts
+     * @param callback
+     * @returns {*}
+     */
+    pathSubscribeAutomations(schemaPathOrPathParts, callback) {
+        return this._store.subscribe(this.pathAutomationsStorePathParts(schemaPathOrPathParts), callback);
+    }
+
+    /**
      * Returns the root extras
      */
     get extrasTree() {
@@ -285,7 +330,7 @@ class FormController extends SimpleEventEmitter {
      * @returns {string[]}
      */
     get storeExtrasTreeRootPathParts() {
-        return this._store.pathPartsFromPath(this._options.paths.extras);
+        return this._store.pathPartsFromPath(this.options.paths.extras);
     }
 
     /**
@@ -313,7 +358,6 @@ class FormController extends SimpleEventEmitter {
      * @returns {*}
      */
     pathGetExtrasTree(valuePathOrPathParts) {
-        console.log("GET EXTRAS TREE", valuePathOrPathParts, this.pathExtrasTreeStorePathParts(valuePathOrPathParts), this._store.get(this.pathExtrasTreeStorePathParts(valuePathOrPathParts)));
         return this._store.get(this.pathExtrasTreeStorePathParts(valuePathOrPathParts));
     }
 
@@ -324,7 +368,7 @@ class FormController extends SimpleEventEmitter {
      * @returns {*}
      */
     pathSetExtrasTree(valuePathOrPathParts, extrasTree) {
-        return this._store.set(this.pathExtrasTreeStorePathParts(valuePathOrPathParts), extrasTree);
+        return this._store.set(this.pathExtrasTreeStorePathParts(valuePathOrPathParts), extrasTree, {array: true});
     }
 
     /**
@@ -343,7 +387,6 @@ class FormController extends SimpleEventEmitter {
      * @returns {*}
      */
     pathSubscribeExtrasTree(valuePathOrPathParts, callback) {
-        console.log("EXTRAS", this.pathExtrasTreeStorePathParts(valuePathOrPathParts))
         return this._store.subscribe(this.pathExtrasTreeStorePathParts(valuePathOrPathParts), callback);
     }
 
@@ -378,7 +421,7 @@ class FormController extends SimpleEventEmitter {
      * @returns {string[]}
      */
     get storeExtrasRootPathParts() {
-        return this._store.pathPartsFromPath(this._options.paths.extras);
+        return this._store.pathPartsFromPath(this.options.paths.extras);
     }
 
     /**
@@ -409,7 +452,7 @@ class FormController extends SimpleEventEmitter {
      * @returns {*}
      */
     pathSetExtras(valuePathOrPathParts, extras) {
-        return this._store.set(this.pathExtrasStorePathParts(valuePathOrPathParts), extras);
+        return this._store.set(this.pathExtrasStorePathParts(valuePathOrPathParts), extras, {array: true});
     }
 
     /**
@@ -459,7 +502,7 @@ class FormController extends SimpleEventEmitter {
      * @returns {*}
      */
     pathSetExtrasChildren(valuePathOrPathParts, extrasChildren) {
-        return this._store.set(this.pathExtrasChildrenStorePathParts(valuePathOrPathParts), extrasChildren);
+        return this._store.set(this.pathExtrasChildrenStorePathParts(valuePathOrPathParts), extrasChildren, {array: true});
     }
 
     /**
@@ -486,7 +529,7 @@ class FormController extends SimpleEventEmitter {
      * @returns {string[]}
      */
     get storeComponentsPathParts() {
-        return this._store.pathPartsFromPath(this._options.paths.components);
+        return this._store.pathPartsFromPath(this.options.paths.components);
     }
 
     /**
@@ -520,7 +563,7 @@ class FormController extends SimpleEventEmitter {
      * @returns {string[]}
      */
     get storeFragmentsPathParts() {
-        return this._store.pathPartsFromPath(this._options.paths.fragments);
+        return this._store.pathPartsFromPath(this.options.paths.fragments);
     }
 
     /**
@@ -556,25 +599,14 @@ class FormController extends SimpleEventEmitter {
     }
 
     /**
-     * Return logger
-     * @returns {*|BaseLogger|BaseLogger}
-     */
-    get logger() {
-        return this._logger;
-    }
-
-    /**
      * Return value and extras from store
      * @param valuePathOrPathParts
      */
     delete(valuePathOrPathParts) {
-        console.log("CONTROLLER REMOVE VALUE");
-
         this.pathDeleteValue(valuePathOrPathParts);
         this.pathDeleteExtrasTree(valuePathOrPathParts);
 
         // destroy()
-        console.log("REMOVE");
         // TODO add this function?
         // go up to parent value:
         // if parent value is an array, reset the array without the missing element
@@ -584,15 +616,11 @@ class FormController extends SimpleEventEmitter {
         // prune value and extras tree???
     }
 
-    log(severity, ...messages) {
-        this._logger[severity](messages.join(" "));
-    }
-
     // TODO subscribe to merged input config using calculate()
 
     destroy() {
         // destroy all nodes
-        // TODO need this?
+        super.destroy();
     }
 }
 

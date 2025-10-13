@@ -1,6 +1,6 @@
 {
   "name": "json-form-core",
-  "version": "0.0.1-alpha4",
+  "version": "0.0.4",
   "description": "Core store for *-json-schema-form modules",
   "main": "exports.js",
   "scripts": {
@@ -12,9 +12,12 @@
   },
   "type": "module",
   "dependencies": {
-    "dataloader": "^2.2.2",
-    "object-rules-engine": "^0.1.0",
-    "object-subscriptions": "^1.0.1"
+    "dataloader": "^2.2.3",
+    "object-path-utils": "^1.0.6",
+    "object-rules-engine": "^0.1.5",
+    "object-subscriptions": "^1.0.3",
+    "simple-utility-logger": "^1.0.0",
+    "utility-base-controllers": "^1.0.0"
   },
   "private": false
 }
